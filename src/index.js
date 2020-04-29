@@ -20,23 +20,38 @@ const users = [
     email: 'asdf.com',
   },
 ];
+const comments = [
+  {
+    id: '100',
+    text: 'michael',
+  },
+  {
+    id: '200',
+    text: 'amanda',
+  },
+  {
+    id: '300',
+    text: 'adsf',
+  },
+];
+
 const posts = [
   {
-    id: '1',
+    id: '10',
     title: 'michael',
     body: 'beins.com',
     published: true,
     author: '1',
   },
   {
-    id: '2',
+    id: '20',
     title: 'amanda',
     body: 'beins.com',
     published: true,
     author: '2',
   },
   {
-    id: '3',
+    id: '30',
     title: 'adsf',
     body: 'asdf.com',
     published: false,
@@ -49,6 +64,7 @@ const typeDefs = `
   type Query {
     users(query:String): [User!]!
     posts(query:String): [Post!]!
+    comments(query:String): [Comment!]!
     me: User!
     post: Post!
   }
@@ -58,6 +74,12 @@ const typeDefs = `
     name: String!
     email: String!
     age: Int
+    posts: [Post!]!
+  }
+
+  type Comment {
+    id: ID!
+    text: String!
   }
 
   type Post {
@@ -78,6 +100,14 @@ const resolvers = {
       }
       return users.filter((user) => {
         return user.name.toLowerCase().includes(args.query.toLowerCase());
+      });
+    },
+    comments(parent, args, ctx, info) {
+      if (!args.query) {
+        return comments;
+      }
+      return comments.filter((comment) => {
+        return comment.text.toLowerCase().includes(args.query.toLowerCase());
       });
     },
     me() {
@@ -101,6 +131,13 @@ const resolvers = {
     author(parent, args, ctx, info) {
       return users.find((user) => {
         return user.id === parent.author;
+      });
+    },
+  },
+  User: {
+    posts(parent, args, ctx, info) {
+      return posts.filter((post) => {
+        return post.author === parent.id;
       });
     },
   },
