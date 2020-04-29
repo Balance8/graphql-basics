@@ -24,14 +24,20 @@ const comments = [
   {
     id: '100',
     text: 'michael',
+    author: '1',
+    post: '10',
   },
   {
     id: '200',
     text: 'amanda',
+    author: '2',
+    post: '10',
   },
   {
     id: '300',
     text: 'adsf',
+    author: '1',
+    post: '10',
   },
 ];
 
@@ -69,17 +75,24 @@ const typeDefs = `
     post: Post!
   }
 
+  type Mutation {
+    createUser(name: String!, email: String!, age: Int): User!
+  }
+
   type User {
     id: ID!
     name: String!
     email: String!
     age: Int
     posts: [Post!]!
+    comments: [Comment!]!
   }
 
   type Comment {
     id: ID!
     text: String!
+    author: User! 
+    post: Post!
   }
 
   type Post {
@@ -88,6 +101,7 @@ const typeDefs = `
     body: String!
     published: Boolean!
     author: User!
+    comments: [Comment!]!
   }
 `;
 
@@ -127,10 +141,20 @@ const resolvers = {
       });
     },
   },
+  Mutation: {
+    createUser(parent, args, ctx, info) {
+      console.log(args);
+    },
+  },
   Post: {
     author(parent, args, ctx, info) {
       return users.find((user) => {
         return user.id === parent.author;
+      });
+    },
+    comments(parent, args, ctx, info) {
+      return comments.filter((comment) => {
+        return comment.post === parent.id;
       });
     },
   },
@@ -138,6 +162,23 @@ const resolvers = {
     posts(parent, args, ctx, info) {
       return posts.filter((post) => {
         return post.author === parent.id;
+      });
+    },
+    comments(parent, args, ctx, info) {
+      return comments.filter((comment) => {
+        return comment.author === parent.id;
+      });
+    },
+  },
+  Comment: {
+    author(parent, args, ctx, info) {
+      return users.find((user) => {
+        return user.id === parent.author;
+      });
+    },
+    post(parent, args, ctx, info) {
+      return posts.find((post) => {
+        return post.id === parent.post;
       });
     },
   },
