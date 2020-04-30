@@ -1,5 +1,20 @@
 import uuidv4 from 'uuid/v4';
 
+// Enum
+// 1. A special type that defines a set of constants
+// 2. This type can then be used as the type for a field (similar to scalar and custom object types)
+// 3. Values for the field must be one of the constants for the type
+
+// UserRole - standard, editor, admin
+
+// type User{
+//  role: UserRole! 
+// }
+
+// laptop.isOn - true - false
+// latop.powerStatus - on - off - sleep / enum gives us more then boolean
+// if some one tries to save without one of these types it gets rejected
+
 const Mutation = {
   createUser(parent, args, { db }, info) {
     const emailTaken = db.users.some((user) => user.email === args.data.email);
@@ -69,21 +84,31 @@ const Mutation = {
 
     return user;
   },
-  deletePost(parent, args, { db }, info) {
+  deletePost(parent, args, { db, pubsub }, info) {
     const postIndex = db.posts.findIndex((post) => post.id === args.id);
 
     if (postIndex === -1) {
       throw new Error('Post Not Found');
     }
 
-    const deletedPosts = db.posts.splice(postIndex, 1);
+    const [post] = db.posts.splice(postIndex, 1);
 
     db.comments = db.comments.filter((comment) => comment.post !== args.id);
 
-    return deletedPosts[0];
+    if (post.published) {
+      pubsub.publish(`post`, {
+        post: {
+          mutation: 'DELETED',
+          data: post,
+        },
+      });
+    }
+
+    return post;
   },
-  updatePost(parent, { id, data }, { db }, info) {
+  updatePost(parent, { id, data }, { db, pubsub }, info) {
     const post = db.posts.find((post) => post.id === id);
+    const originalPost = { ...post };
 
     if (!post) {
       throw new Error('Post not found');
@@ -99,6 +124,31 @@ const Mutation = {
 
     if (typeof data.published === 'boolean') {
       post.published = data.published;
+      if (originalPost.published && !post.published) {
+        //deleted
+        pubsub.publish(`post`, {
+          post: {
+            mutation: 'DELETED',
+            data: originalPost,
+          },
+        });
+      } else if (!originalPost.published && post.published) {
+        //created
+        pubsub.publish(`post`, {
+          post: {
+            mutation: 'CREATED',
+            data: post,
+          },
+        });
+      }
+    } else if (post.published) {
+      //updated
+      pubsub.publish(`post`, {
+        post: {
+          mutation: 'UPDATED',
+          data: post,
+        },
+      });
     }
 
     return post;
@@ -118,7 +168,12 @@ const Mutation = {
     db.posts.push(post);
 
     if (args.data.published) {
-      pubsub.publish(`post`, { post });
+      pubsub.publish(`post`, {
+        post: {
+          mutation: 'CREATED',
+          data: post,
+        },
+      });
     }
 
     return post;
@@ -142,11 +197,16 @@ const Mutation = {
     };
 
     db.comments.push(comment);
-    pubsub.publish(`comment ${args.data.post}`, { comment });
+    pubsub.publish(`comment ${args.data.post}`, {
+      comment: {
+        mutation: 'CREATED',
+        data: comment,
+      },
+    });
 
     return comment;
   },
-  deleteComment(parent, args, { db }, info) {
+  deleteComment(parent, args, { db, pubsub }, info) {
     const commentIndex = db.comments.findIndex(
       (comment) => comment.id === args.id
     );
@@ -155,9 +215,15 @@ const Mutation = {
       throw new Error('Comment Not Found');
     }
 
-    const deletedComments = db.comments.splice(commentIndex, 1);
+    const [deletedComment] = db.comments.splice(commentIndex, 1);
+    pubsub.publish(`comment ${deletedComment.post}`, {
+      comment: {
+        mutation: 'DELETED',
+        data: comment,
+      },
+    });
 
-    return deletedComments[0];
+    return deletedComment;
   },
   updateComment(parent, { id, data }, { db }, info) {
     const comment = db.comments.find((comment) => comment.id === id);
@@ -169,6 +235,13 @@ const Mutation = {
     if (typeof data.text === 'string') {
       comment.text = data.text;
     }
+
+    pubsub.publish(`comment ${comment.post}`, {
+      comment: {
+        mutation: 'UPDATED',
+        data: comment,
+      },
+    });
 
     return comment;
   },
